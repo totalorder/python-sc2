@@ -56,17 +56,17 @@ class RampWallBot(sc2.BotAI):
             if len(depot_placement_positions) > 0:
                 # Choose any depot location
                 target_depot_location = depot_placement_positions.pop()
-                ws = self.workers.gathering
-                if ws: # if workers were found
-                    w = ws.random
+                gathering = self.workers.gathering
+                if gathering: # if workers were found
+                    w = gathering.random
                     await self.do(w.build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
         if depots.ready.exists and self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
             if self.units(BARRACKS).amount + self.already_pending(BARRACKS) == 0:
-                ws = self.workers.gathering
-                if ws and barracks_placement_position:
-                    w = ws.random
+                gathering = self.workers.gathering
+                if gathering and barracks_placement_position:
+                    w = gathering.random
                     await self.do(w.build(BARRACKS, barracks_placement_position))
 
         # Build refinery after barracks
@@ -99,12 +99,28 @@ class RampWallBot(sc2.BotAI):
                 await self.do(barracks.build(BARRACKSREACTOR))
                 continue
 
+            # TODO: Check build queue
             if self.can_afford(MARINE) and self.supply_left > 0:
                 await self.do(barracks.train(MARINE))
 
         # Assign idle workers to minerals
         for scv in self.units(SCV).idle:
             await self.do(scv.gather(self.state.mineral_field.closest_to(cc)))
+
+        # Attack in squads of 12 marines
+        idle_marines = self.units(MARINE).idle
+        if idle_marines.amount >= 12:
+            for marine in idle_marines:
+                await self.do(marine.attack(self.enemy_start_locations[0]))
+
+        # Repair supply depot
+        for depot in self.units(SUPPLYDEPOT).ready:
+            # TODO: Don't send all workers
+            if depot.health_percentage < 1 and not depot.is_repairing:
+                gathering = self.workers.gathering
+                if gathering:
+                    await self.do(gathering.random.repair(depot))
+
 
 def main():
     sc2.run_game(sc2.maps.get("OdysseyLE"), [
