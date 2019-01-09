@@ -5,6 +5,8 @@ from sc2 import Race, Difficulty
 from sc2.constants import *
 from sc2.player import Bot, Computer
 
+from examples.terran import ramp_wall
+
 class ZergRushBot(sc2.BotAI):
     def __init__(self):
         self.drone_counter = 0
@@ -103,7 +105,8 @@ class ZergRushBot(sc2.BotAI):
 def main():
     sc2.run_game(sc2.maps.get("(2)CatalystLE"), [
         Bot(Race.Zerg, ZergRushBot()),
-        Computer(Race.Terran, Difficulty.Medium)
+        Bot(Race.Terran, ramp_wall.RampWallBot()),
+        # Computer(Race.Terran, Difficulty.Medium)
     ], realtime=False, save_replay_as="ZvT.SC2Replay")
 
 if __name__ == '__main__':

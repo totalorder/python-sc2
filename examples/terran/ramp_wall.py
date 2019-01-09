@@ -1,4 +1,6 @@
 import random
+import logging
+logger = logging.getLogger(__name__)
 
 import sc2
 from sc2 import Race, Difficulty
@@ -51,25 +53,58 @@ class RampWallBot(sc2.BotAI):
 
         # Build depots
         if self.can_afford(SUPPLYDEPOT) and not self.already_pending(SUPPLYDEPOT):
-            if len(depot_placement_positions) == 0:
-                return
-            # Choose any depot location
-            target_depot_location = depot_placement_positions.pop()
-            ws = self.workers.gathering
-            if ws: # if workers were found
-                w = ws.random
-                await self.do(w.build(SUPPLYDEPOT, target_depot_location))
+            if len(depot_placement_positions) > 0:
+                # Choose any depot location
+                target_depot_location = depot_placement_positions.pop()
+                ws = self.workers.gathering
+                if ws: # if workers were found
+                    w = ws.random
+                    await self.do(w.build(SUPPLYDEPOT, target_depot_location))
 
         # Build barracks
         if depots.ready.exists and self.can_afford(BARRACKS) and not self.already_pending(BARRACKS):
-            if self.units(BARRACKS).amount + self.already_pending(BARRACKS) > 0:
-                return
-            ws = self.workers.gathering
-            if ws and barracks_placement_position: # if workers were found
-                w = ws.random
-                await self.do(w.build(BARRACKS, barracks_placement_position))
+            if self.units(BARRACKS).amount + self.already_pending(BARRACKS) == 0:
+                ws = self.workers.gathering
+                if ws and barracks_placement_position:
+                    w = ws.random
+                    await self.do(w.build(BARRACKS, barracks_placement_position))
 
+        # Build refinery after barracks
+        if (self.already_pending(BARRACKS) or self.units(BARRACKS).amount) \
+                and not self.units(REFINERY).exists and not self.already_pending(REFINERY) \
+            and self.can_afford(REFINERY):
+                vgs = self.state.vespene_geyser.closer_than(20.0, cc)
+                for vg in vgs:
+                    if self.units(REFINERY).closer_than(1.0, vg).exists:
+                        break
 
+                    worker = self.select_build_worker(vg.position)
+                    if worker is None:
+                        break
+
+                    await self.do(worker.build(REFINERY, vg))
+                    break
+
+        # Assign workers to refinery
+        for refinery in self.units(REFINERY):
+            if refinery.assigned_harvesters < refinery.ideal_harvesters:
+                w = self.workers.closer_than(20, refinery)
+                if w.exists:
+                    await self.do(w.random.gather(refinery))
+
+        # Build reactor
+        for barracks in self.units(BARRACKS).ready:
+            if barracks.add_on_tag == 0 and self.can_afford(BARRACKSREACTOR) and \
+                    not self.units(BARRACKSREACTOR).not_ready.exists:
+                await self.do(barracks.build(BARRACKSREACTOR))
+                continue
+
+            if self.can_afford(MARINE) and self.supply_left > 0:
+                await self.do(barracks.train(MARINE))
+
+        # Assign idle workers to minerals
+        for scv in self.units(SCV).idle:
+            await self.do(scv.gather(self.state.mineral_field.closest_to(cc)))
 
 def main():
     sc2.run_game(sc2.maps.get("OdysseyLE"), [
